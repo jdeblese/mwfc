@@ -11,6 +11,13 @@ entity main is
         dispa : out std_logic_vector(3 downto 0);
         btn : in std_logic_vector(4 downto 1);
         led : out std_logic_vector(7 downto 0);
+        OLED_VDD : out std_logic;
+        OLED_BAT : out std_logic;
+        OLED_RST : out std_logic;
+        OLED_CS : out std_logic;
+        OLED_SCK : out std_logic;
+        OLED_MOSI : out std_logic;
+        OLED_CD : out std_logic;
         clk : in std_logic;
         rst : in std_logic );
 end main;
@@ -33,6 +40,11 @@ architecture Behavioral of main is
 
     signal data : std_logic_vector(15 downto 0);
 
+	signal tiledata : std_logic_vector(15 downto 0);
+	signal tileaddr : std_logic_vector(9 downto 0);
+	signal tilewen : std_logic;
+
+	signal digit : unsigned(3 downto 0);
 begin
 
 	fc : entity work.mwfc
@@ -61,6 +73,79 @@ begin
             en => dispen,
             clk => clk,
             rst => rst );
+
+	gpu : entity work.otile
+		port map (
+			clk => clk,
+			rst => rst,
+			data => tiledata,
+			addr => tileaddr,
+			wen => tilewen,
+			OLED_VDD => OLED_VDD,
+			OLED_BAT => OLED_BAT,
+			OLED_RST => OLED_RST,
+			OLED_CS => OLED_CS,
+			OLED_SCK => OLED_SCK,
+			OLED_MOSI => OLED_MOSI,
+			OLED_CD => OLED_CD );
+
+	-- Increment digit on every clock tic
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			digit <= digit + "1";
+		end if;
+	end process;
+
+	-- Set the data depending on the digit
+	process(digit, order, bcd)
+		variable place : signed(order'range);
+		variable sdigit : signed(digit'length downto digit'low);
+	begin
+		sdigit := signed("0" & std_logic_vector(digit));
+		-- Determine which digit is being targeted, signed with the ones being '0'
+		case digit(3 downto 2) is
+			when "00" => place := to_signed(8, place'length) - sdigit;
+			when "01" => place := to_signed(9, place'length) - sdigit;
+			when "10" => place := to_signed(10, place'length) - sdigit;
+			when "11" => place := to_signed(11, place'length) - sdigit;
+			when others => place := (others => '0');
+		end case;
+
+		if digit = x"3" then
+			if order > to_signed(2, order'length) then
+				tiledata <= x"002c";
+			else
+				tiledata <= x"0020";
+			end if;
+		elsif digit = x"7" then
+			if order > to_signed(-1, order'length) then
+				tiledata <= x"002c";
+			else
+				tiledata <= x"0020";
+			end if;
+		elsif digit = x"b" then
+			tiledata <= x"002e";
+		elsif digit = x"f" then
+			tiledata <= x"0020";
+		elsif place < order then
+--		elsif to_signed(8,order'length) + sdigit(3 downto 2) < order + sdigit then
+			tiledata <= x"0030";
+		elsif place > (order + to_signed(3, order'length)) then
+			tiledata <= x"0020";
+		else
+			case place - order is
+				when x"00" => tiledata <= x"000" & bcd(3 downto 0);
+				when x"01" => tiledata <= x"000" & bcd(7 downto 4);
+				when x"02" => tiledata <= x"000" & bcd(11 downto 8);
+				when x"03" => tiledata <= x"000" & bcd(15 downto 12);
+				when others => tiledata <= (others => '0');
+			end case;
+		end if;
+	end process;
+
+	tilewen <= '1';
+	tileaddr <= "00" & x"6" & std_logic_vector(digit);
 
     inclk : BUFG port map ( O => clk2, I => input );
 

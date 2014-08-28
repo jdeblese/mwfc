@@ -87,16 +87,16 @@ NET "btn<4>"         LOC = "D9"  | IOSTANDARD = "LVCMOS33";   #Bank = 0, Pin nam
 #NET "JC<6>"          LOC = "J6"  | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L47N_M3A1,                      Sch name = JC9
 #NET "JC<7>"          LOC = "F2"  | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L48P_M3BA0,                     Sch name = JC10
 
-##JD, LX16 Die only
-#NET "JD<0>"          LOC = "G11" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L40P,                           Sch name = JD1
-#NET "JD<1>"          LOC = "F10" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L40N,                           Sch name = JD2
-#NET "JD<2>"          LOC = "F11" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L42P,                           Sch name = JD3
-#NET "JD<3>"          LOC = "E11" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L42N,                           Sch name = JD4
-#NET "JD<4>"          LOC = "D12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L47P,                           Sch name = JD7
-#NET "JD<5>"          LOC = "C12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L47N,                           Sch name = JD8
-#NET "JD<6>"          LOC = "F12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L51P,                           Sch name = JD9
-#NET "JD<7>"          LOC = "E12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L51N,                           Sch name = JD10
 
+##JD, LX16 Die only
+NET "OLED_CS"          LOC = "G11" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L40P,                           Sch name = JD1
+NET "OLED_MOSI"          LOC = "F10" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L40N,                           Sch name = JD2
+#NET "OLED_NC"          LOC = "F11" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L42P,                           Sch name = JD3
+NET "OLED_SCK"          LOC = "E11" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L42N,                           Sch name = JD4
+NET "OLED_CD"          LOC = "D12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L47P,                           Sch name = JD7
+NET "OLED_RST"          LOC = "C12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L47N,                           Sch name = JD8
+NET "OLED_BAT"          LOC = "F12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L51P,                           Sch name = JD9
+NET "OLED_VDD"          LOC = "E12" | IOSTANDARD = "LVCMOS33";   #Bank = 3, Pin name = IO_L51N,                           Sch name = JD10
 
 ## Usb-RS232 interface
 #NET "RsRx"           LOC = "N17" | IOSTANDARD = "LVCMOS33";   #Bank = 1, Pin name = IO_L48P_HDC_M1DQ8,                 Sch name = MCU-RX
