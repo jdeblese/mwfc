@@ -17,7 +17,7 @@ entity counter is
 end counter;
 
 architecture Behavioral of counter is
-    type states is (ST_WAIT, ST_COUNTING, ST_FINISHING);
+    type states is (ST_WAIT, ST_COUNTING, ST_FINISHING, ST_OVERFLOW);
 
     -- *** input-based signals ***
     signal input_en, input_en_next : std_logic;
@@ -79,15 +79,6 @@ begin
         istate_new := istate;
         tstate_new := tstate;
         
-        -- Detect overflows
-        if timer_en = '1' and N + "1" = "0" then
-            tover_new := '1';
-        end if;
-
-        if input_en = '1' and M + "1" = "0" then
-            iover_new := '1';
-        end if;
-
         case istate is
             when ST_WAIT =>
                 -- DANGER: crosses clock domain
@@ -98,6 +89,10 @@ begin
                     input_en_new := '1';
                 end if;
             when ST_COUNTING =>
+                -- On overflow, turn off counter and wait for timer to stop
+                if M + "1" = "0" then
+                    istate_new := ST_OVERFLOW;
+                end if;
                 -- DANGER: crosses clock domain
                 --     input done is in the 'timer' domain
                 if done = '1' then
@@ -106,34 +101,54 @@ begin
                     icount_next <= M + "1";  -- Latch out the counter result
                     iover_new := '0';        -- Clear any overflow
                 end if;
+            when ST_OVERFLOW =>
+                iover_new := '1';
+                input_en_new := '0';     -- Disable the counter
+                istate_new := ST_WAIT;
             when others =>
         end case;
 
         case tstate is
             when ST_WAIT =>
+                done_new := '0';
                 if sync_ien(1) = '1' then
                     tstate_new := ST_COUNTING;
                     -- 'timer' couter is started on rising edge of 'timer'
                     timer_en_new := '1';
                 end if;
             when ST_COUNTING =>
+                if N + "1" = "0" then
+                    tstate_new := ST_OVERFLOW;
+                end if;
+                -- Indicate when the minimum measurement interval has been reached
+                -- Subtract 2 tics to compensate for the 'input_en' synchronizer
                 if N = to_unsigned(measureinterval - 2, N'length) then
                     tstate_new := ST_FINISHING;
-                    -- Indicate when the minimum measurement interval has been reached
-                    -- Subtract 2 tics to compensate for the 'input_en' synchronizer
                     done_new := '1';
                 end if;
             when ST_FINISHING =>
+                if N + "1" = "0" then
+                    tstate_new := ST_OVERFLOW;
+                end if;
                 -- If the timer's off, signal done and valid output
                 if timer_en = '0' then
-                    done_new := '0';
+--                  done_new := '0';
                     strobe_next <= '1';
+                    tstate_new := ST_WAIT;
                 -- Otherwise, turn off the timer when the input counter is off
                 elsif sync_ien(1) = '0' then
-                    tstate_new := ST_WAIT;
                     timer_en_new := '0';     -- Disable the counter
                     tcount_next <= N + "1";  -- Latch out the counter result
                     tover_new := '0';        -- Clear any overflow
+                end if;
+            when ST_OVERFLOW =>
+                timer_en_new := '0';     -- Disable the counter
+                tover_new := '1';
+                done_new := '1';
+                strobe_next <= '1';
+                if sync_ien(1) = '0' then
+                    strobe_next <= '1';
+                    tstate_new := ST_WAIT;
                 end if;
             when others =>
         end case;
