@@ -145,7 +145,6 @@ begin
                 timer_en_new := '0';     -- Disable the counter
                 tover_new := '1';
                 done_new := '1';
-                strobe_next <= '1';
                 if sync_ien(1) = '0' then
                     strobe_next <= '1';
                     tstate_new := ST_WAIT;

@@ -10,10 +10,15 @@ architecture Behavioral of fpdiv_tb is
     signal clk : std_logic := '0';
     signal rst : std_logic;
 
-    signal dividend : unsigned (17 downto 0);
-    signal divisor : unsigned (17 downto 0);
-    signal quotient : unsigned (12 downto 0);
-    signal scale : signed (4 downto 0);
+    constant precision : integer := 13;
+    constant inputbits : integer := precision + 5;
+    constant timerbits : integer := 18;
+    constant nscalestages : integer := 6;
+
+    signal dividend : unsigned (inputbits-1 downto 0);
+    signal divisor : unsigned (timerbits-1 downto 0);
+    signal ratio : unsigned (precision-1 downto 0);
+    signal scale : signed (nscalestages-1 downto 0);
     signal busy : std_logic;
     signal overflow : std_logic;
     signal strobe : std_logic := '0';
@@ -29,13 +34,33 @@ begin
         wait for clk_period;
 
         assert busy = '0' report "Divider is still busy" severity error;
+        dividend <= to_unsigned(1, dividend'length);
+        divisor <= to_unsigned(262143, divisor'length);
+        strobe <= '1';
+        wait for clk_period;
+        strobe <= '0';
+        wait for clk_period * 24;
+        assert overflow = '1' report "Test should have overflowed" severity error;
+
+        assert busy = '0' report "Divider is still busy" severity error;
+        dividend <= to_unsigned(0, dividend'length);
+        divisor <= to_unsigned(262143, divisor'length);
+        strobe <= '1';
+        wait for clk_period;
+        strobe <= '0';
+        wait for clk_period * 24;
+        assert overflow = '0' report "Test should have overflowed" severity error;
+        assert ratio = 0 report "Bad quotient" severity error;
+        assert scale = 0 report "Bad scale" severity error;
+
+        assert busy = '0' report "Divider is still busy" severity error;
         dividend <= to_unsigned(27, dividend'length);
         divisor <= to_unsigned(4, divisor'length);
         strobe <= '1';
         wait for clk_period;
         strobe <= '0';
         wait for clk_period * 24;
-        assert quotient = 6912 report "Bad quotient" severity error;
+        assert ratio = 6912 report "Bad quotient" severity error;
         assert scale = -10 report "Bad scale" severity error;
 
         assert busy = '0' report "Divider is still busy" severity error;
@@ -45,7 +70,7 @@ begin
         wait for clk_period;
         strobe <= '0';
         wait for clk_period * 24;
-        assert quotient = 6554 report "Bad quotient" severity error;
+        assert ratio = 6554 report "Bad quotient" severity error;
         assert scale = -14 report "Bad scale" severity error;
 
         assert busy = '0' report "Divider is still busy" severity error;
@@ -64,7 +89,7 @@ begin
         wait for clk_period;
         strobe <= '0';
         wait for clk_period * 24;
-        assert quotient = 7280 report "Bad quotient" severity error;
+        assert ratio = 7280 report "Bad quotient" severity error;
         assert scale = -16 report "Bad scale" severity error;
 
         assert busy = '0' report "Divider is still busy" severity error;
@@ -83,13 +108,13 @@ begin
 
     dut : entity work.fpdiv
         generic map (
-            size => dividend'length,
-            precision => quotient'length,
+            size => divisor'length,
+            precision => ratio'length,
             pscale => scale'length )
         port map (
             dividend => dividend,
             divisor => divisor,
-            quotient => quotient,
+            quotient => ratio,
             scale => scale,
             busy => busy,
             overflow => overflow,

@@ -109,7 +109,11 @@ begin
 
             -- Increases divisor until it is >= dividend
             when ST_PRESCALE =>
-                if dividend_int > divisor_int then
+                if dividend_int = "0" then
+                    quotient_next := (others => '0');
+                    scale_next := (others => '0');
+                    state_new <= ST_WAIT;
+                elsif dividend_int > divisor_int then
                     -- First check for overflow conditions
                     assert divisor_int(divisor_int'high) /= '1'
                         report "divisor overflow" severity warning;
@@ -143,6 +147,12 @@ begin
                         quotient_next(0) := '1';
                     end if;
                 else
+                    assert dividend_int(dividend_int'high) /= '1'
+                        report "Dividend overflow (next dividend will as well)" severity error;
+                    if dividend_int(dividend_int'high) = '1' then
+                        overflow_next := '1';
+                        state_new <= ST_WAIT;
+                    end if;
                     -- determine if subtraction must occur
                     if dividend_int < divisor_int then
                         nextd := dividend_int;
@@ -152,11 +162,11 @@ begin
                         nextq := quotient_int + "1";
                     end if;
                     -- quotient can never overflow, due to the test above
-                    -- dividend can never overflow, because divisor is always > (dividend / 2)
+                    -- nextd can never overflow, because divisor is always > (dividend / 2)
                     assert nextd(nextd'high) /= '1'
-                        report "Here be dragons, dividend should not be able to overflow" severity error;
+                        report "Here be dragons, next dividend should not be able to overflow" severity error;
                     assert nextq(nextq'high) /= '1'
-                        report "Here be dragons, quotient should not be able to overflow" severity error;
+                        report "Here be dragons, next quotient should not be able to overflow" severity error;
 
                     dividend_next := shift_left(nextd, 1);
                     quotient_next := shift_left(nextq, 1);
