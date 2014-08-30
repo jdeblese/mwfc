@@ -34,20 +34,22 @@ architecture Behavioral of mwfc is
     
     signal divbusy, divoverflow, divstrobe : std_logic;
 
+    signal baseconvstrobe : std_logic;
+
 	signal final : unsigned(precision downto 0);
 	signal order : signed(7 downto 0);
 
     type A is array (0 to 31) of integer;
     constant digits : A := (
-		0, 0, 0, 0, 0, 0, 0, 0, 0,
-		2,
-		3, 3, 3, 3,
-        4, 4, 4,
-        5, 5, 5,
-        6, 6, 6, 6,
-        7, 7, 7,
-        8, 8, 8,
-        9, 9 );
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        2,           -- 2^9
+        3, 3, 3, 3,  -- 2^10 to 2^13
+        4, 4, 4,     -- 2^14 to 2^16
+        5, 5, 5,     -- 2^17 to 2^19
+        6, 6, 6, 6,  -- 2^20 to 2^23
+        7, 7, 7,     -- 2^24 to 2^26
+        8, 8, 8,     -- 2^27 to 2^29
+        9, 9 );      -- 2^30 to 2^31
 	type B is array(0 to 31) of unsigned(precision + 2 downto 0);
 	constant corrections : B := (
 		x"0000", x"0000", x"0000", x"0000", x"0000", x"0000", x"0000", x"0000", x"0000",
@@ -61,8 +63,6 @@ architecture Behavioral of mwfc is
 		x"EE6B", x"7736" );
 
     signal bcd : std_logic_vector(15 downto 0);
-    signal gpustrobe : std_logic;
-
 begin
 
     ord <= order;
@@ -78,41 +78,31 @@ begin
         port map (
             hex => final,
             bcd => bcd,
-            strobe => gpustrobe,
+            strobe => baseconvstrobe,
             rst => rst,
             clk => clk );
-
-	-- The Hex2BCD converter needs to wait 3 clock tics?
-    process(clk)
-        variable counter : unsigned(2 downto 0);
-    begin
-        if rising_edge(clk) then
-            gpustrobe <= '0';
-            if divbusy = '1' then
-                counter := "100";
-            else
-                if counter = "001" then
-                    gpustrobe <= '1';
-                end if;
-                if counter > "0" then
-                    counter := counter - "1";
-                end if;
-            end if;
-        end if;
-    end process;
 
 	process(clk)
         variable C0 : unsigned(corrections(0)'range);
 		variable S0 : integer;
 		variable F1, F2, F3 : unsigned(ratio'length + corrections(0)'length - 1 downto 0);
         variable O1, O2 : signed(order'range);
+        variable divstate : std_logic;
+        variable bcstrobe : std_logic_vector(3 downto 0);  -- 4-stage pipeline
 	begin
-		if rising_edge(clk) then
+        if rst = '1' then
+            S0 := 0;
+            C0 := (others => '0');
+            divstate := '0';
+            bcstrobe := (others => '0');
+            baseconvstrobe <= '0';
+        elsif rising_edge(clk) then
             -- Pipeline stage 3
+            --   Shift and round the final value
 			if divoverflow = '0' then
 				F3 := shift_right(F2, 4);
 				-- Round based on highest truncated bit
-				if F3(0) = '1' then
+                if F2(0) = '1' then
 					final <= F3(final'high+1 downto 1) + "1";
 				else
 					final <= F3(final'high+1 downto 1);
@@ -121,10 +111,12 @@ begin
             order <= O2;
 
             -- Pipeline stage 2
+            --   Check if an additional scaling factor is needed
 			if divoverflow = '0' then
+                -- This comparison will give a warning at the start of a simulation due to F1 being unknown
 				if F1 < shift_left(to_unsigned(1000, F1'length),5) then
-					-- Five bits, because retaining one to round
-					--F2 := shift_left(F1(F1'high / 2 downto 0),1) * 5;
+                    -- Five bits, because four bits precision + 1 rounding
+                    -- Multiply by 10 (8 + 2)
 					F2 := shift_left(F1,1) + shift_left(F1,3);
 					O2 := O1 - 1;
                 else
@@ -134,17 +126,27 @@ begin
 			end if;
 
             -- Pipeline stage 1
-			O1 := to_signed(8, order'length) - digits(S0);
+            --   Compute the base-10 exponent and mantissa
+            O1 := to_signed(8, order'length) - digits(S0);  -- Get fp base-10 exponent
 			if divoverflow = '0' then
-				-- corrections is shifted up precision+3 bits
-                -- Pipeline the access to corrections
+                -- the values in 'corrections' are shifted up precision+3 bits
                 -- Multiply is a slow operation
 				F1 := shift_right(ratio * C0, precision + 3 - 1 - 4);
             end if;
 
             -- Pipeline stage 0
-			S0 := -to_integer(scaling);
+            --   Look up certain values
+            S0 := -to_integer(scaling);  -- Floating-point base-2 exponent
             C0 := corrections(S0);
+
+            -- Misc.
+            if divstate = '1' and divbusy = '0' then
+                bcstrobe := bcstrobe(bcstrobe'high-1 downto 0) & '1';
+            else
+                bcstrobe := bcstrobe(bcstrobe'high-1 downto 0) & '0';
+            end if;
+            divstate := divbusy;
+            baseconvstrobe <= bcstrobe(bcstrobe'high);
 		end if;
 	end process;
 
