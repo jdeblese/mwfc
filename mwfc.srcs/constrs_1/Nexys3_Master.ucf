@@ -5,9 +5,14 @@
 
 ## Clock signal
 NET "clk"            LOC = "V10" | IOSTANDARD = "LVCMOS33";   #Bank = 2, pin name = IO_L30N_GCLK0_USERCCLK,            Sch name = GCLK
-Net "clk" TNM_NET = sys_clk_pin;
+NET "clk" TNM_NET = sys_clk_pin;
 TIMESPEC TS_sys_clk_pin = PERIOD sys_clk_pin 100000 kHz;
 
+NET "clkfx" TNM_NET = "net_clkfx";
+TIMESPEC TS_net_clkfx = PERIOD net_clkfx 98000 kHz;
+
+TIMESPEC TS_CROSSI2T = FROM "net_clkfx" TO "sys_clk_pin" 3 ns DATAPATHONLY;
+TIMESPEC TS_CROSST2I = FROM "sys_clk_pin" TO "net_clkfx" 3 ns DATAPATHONLY;
 
 ## 7 segment display
 NET "dispc<0>"         LOC = "T17" | IOSTANDARD = "LVCMOS33";   #Bank = 1, Pin name = IO_L51P_M1DQ12,                    Sch name = CA

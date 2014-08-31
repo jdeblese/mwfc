@@ -82,7 +82,7 @@ begin
             rst => rst,
             clk => clk );
 
-	process(clk)
+	process(clk,rst)
         variable C0 : unsigned(corrections(0)'range);
 		variable S0 : integer;
 		variable F1, F2, F3 : unsigned(ratio'length + corrections(0)'length - 1 downto 0);

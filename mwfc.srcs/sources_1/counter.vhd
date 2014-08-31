@@ -40,6 +40,14 @@ architecture Behavioral of counter is
     signal done, done_next : std_logic;
     signal strobe_next : std_logic;
 
+    -- For synchronizing the 'done' signal into the 'input' clock domain
+    -- Introduces a significant delay when the frequency of 'input' is
+    --   low, possibly enough to cause the 'timer' counter to overflow.
+    --   It prevents metastability problems, however, and increasing the
+    --   measurement time will help accuracy.
+    signal sync_done : std_logic_vector(1 downto 0);
+    -- Likewise for the 'timer_en' signal
+    signal sync_ten : std_logic_vector(1 downto 0);
 begin
 
     icount <= icount_int;
@@ -59,7 +67,7 @@ begin
     end process;
 
     -- Main FSM-type programming of the counter
-    comb : process(enable, input_en, sync_ien, icount_int, timer_en, tcount_int, done, M, N, tover, iover, istate, tstate)
+    comb : process(enable, input_en, sync_ien, icount_int, timer_en, sync_ten, tcount_int, done, sync_done, M, N, tover, iover, istate, tstate)
         variable input_en_new, timer_en_new, done_new : std_logic;
         variable tover_new, iover_new : std_logic;
         variable istate_new, tstate_new : states;
@@ -79,11 +87,12 @@ begin
         istate_new := istate;
         tstate_new := tstate;
         
+
         case istate is
             when ST_WAIT =>
                 -- DANGER: crosses clock domain
                 --     'timer_en' and 'done' is in the 'timer' domain
-                if timer_en = '0' and done = '0' then
+                if sync_ten(1) = '0' and sync_done(1) = '0' then
                     istate_new := ST_COUNTING;
                     -- 'input' couter is started on rising edge of 'input'
                     input_en_new := '1';
@@ -95,7 +104,7 @@ begin
                 end if;
                 -- DANGER: crosses clock domain
                 --     input done is in the 'timer' domain
-                if done = '1' then
+                if sync_done(1) = '1' then
                     istate_new := ST_WAIT;
                     input_en_new := '0';     -- Disable the counter
                     icount_next <= M + "1";  -- Latch out the counter result
@@ -121,8 +130,7 @@ begin
                     tstate_new := ST_OVERFLOW;
                 end if;
                 -- Indicate when the minimum measurement interval has been reached
-                -- Subtract 2 tics to compensate for the 'input_en' synchronizer
-                if N = to_unsigned(measureinterval - 2, N'length) then
+                if N = to_unsigned(measureinterval, N'length) then
                     tstate_new := ST_FINISHING;
                     done_new := '1';
                 end if;
@@ -196,6 +204,8 @@ begin
             icount_int <= (others => '0');
             iover <= '0';
             istate <= ST_WAIT;
+            sync_done <= (others => '0');
+            sync_ten <= (others => '0');
         elsif rising_edge(input) then
             if input_en = '1' then
                 M <= M + "1";
@@ -206,6 +216,8 @@ begin
             icount_int <= icount_next;
             iover <= iover_next;
             istate <= istate_next;
+            sync_done <= sync_done(0) & done;
+            sync_ten <= sync_ten(0) & timer_en;
         end if;
     end process;
 
