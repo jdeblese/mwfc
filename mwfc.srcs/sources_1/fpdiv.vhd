@@ -140,6 +140,7 @@ begin
 
             -- Computes quotient by shifting dividend up and subtracting divisor
             WHEN ST_DIV =>
+                -- When the quotient register is full, division is complete
                 if quotient_int(quotient_int'high) = '1' then
                     state_new <= ST_WAIT;
                     if dividend_int >= divisor_int then
