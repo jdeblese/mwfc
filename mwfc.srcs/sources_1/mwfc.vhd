@@ -8,10 +8,10 @@ use UNISIM.VComponents.all;
 entity mwfc is
     Generic (
         precision : integer := 13;
-        measureinterval : integer := 8191 );  -- FIXME 2**precision - 1
+        bcdprecision : integer := 16 );
     Port (
-        rawfrq : out unsigned(precision downto 0);
-        bcdfrq : out std_logic_vector(15 downto 0);
+        rawfrq : out unsigned(precision - 1 downto 0);  -- May need an extra bit of margin
+        bcdfrq : out std_logic_vector(bcdprecision - 1 downto 0);
         ord : out signed(7 downto 0);
         overflow : out std_logic;
         clk : in std_logic;
@@ -20,50 +20,62 @@ entity mwfc is
 end mwfc;
 
 architecture Behavioral of mwfc is
+    -- The following constants are taken from the accuracy calculation
+    -- on the associated spreadsheet
+    constant hfbitmargin : integer := 2;  -- FIXME should be 2
+    constant lfbitmargin : integer := 19;
 
-    constant inputbits : integer := precision + 5;
-    constant timerbits : integer := 18;
-    constant nscalestages : integer := 6;  -- FIXME log2 of maxscalefactor
+    constant inputbits : integer := precision + hfbitmargin;
+    constant timerbits : integer := lfbitmargin;
+    constant nscalestages : integer := 7;  -- FIXME log2 of maxscalefactor
 
     signal tcount, isync1 : unsigned(timerbits-1 downto 0);
     signal icount, isync0 : unsigned(inputbits-1 downto 0);
-    
+
     signal scaling : signed(nscalestages-1 downto 0);
 
     signal ratio : unsigned(precision-1 downto 0);
-    
+
     signal divbusy, divoverflow, divstrobe : std_logic;
 
     signal baseconvstrobe : std_logic;
 
-	signal final : unsigned(precision downto 0);
-	signal order : signed(7 downto 0);
+    signal final : unsigned(rawfrq'range);
+    signal order : signed(ord'range);
 
-    type A is array (0 to 31) of integer;
+    constant measureinterval : integer := 2**precision;
+    type A is array (0 to 35) of integer;
     constant digits : A := (
-        0, 0, 0, 0, 0, 0, 0, 0, 0,
-        2,           -- 2^9
+        0, 0, 0, 0,
+        1, 1, 1,     -- 2^4 to 2^6
+        2, 2, 2,     -- 2^7 to 2^9
         3, 3, 3, 3,  -- 2^10 to 2^13
         4, 4, 4,     -- 2^14 to 2^16
         5, 5, 5,     -- 2^17 to 2^19
         6, 6, 6, 6,  -- 2^20 to 2^23
         7, 7, 7,     -- 2^24 to 2^26
         8, 8, 8,     -- 2^27 to 2^29
-        9, 9 );      -- 2^30 to 2^31
-	type B is array(0 to 31) of unsigned(precision + 2 downto 0);
-	constant corrections : B := (
-		x"0000", x"0000", x"0000", x"0000", x"0000", x"0000", x"0000", x"0000", x"0000",
-		x"3200",
-		x"FA00", x"7D00", x"3E80", x"1F40",
-		x"9C40", x"4E20", x"2710",
-		x"C350", x"61A8", x"30D4",
-		x"F424", x"7A12", x"3D09", x"1E85",
-		x"9897", x"4C4B", x"2626",
-		x"BEBC", x"5F5E", x"2FAF",
-		x"EE6B", x"7736" );
+        9, 9, 9, 9,  -- 2^30 to 2^33
+        10, 10 );    -- 2^34 to 2^35
+    type B is array(0 to 35) of unsigned(precision + 2 downto 0);
+    constant corrections : B := (
+        x"00000", x"80000", x"40000", x"20000",
+        x"A0000", x"50000", x"28000",
+        x"C8000", x"64000", x"32000",
+        x"FA000", x"7D000", x"3E800", x"1F400",
+        x"9C400", x"4E200", x"27100",
+        x"C3500", x"61A80", x"30D40",
+        x"F4240", x"7A120", x"3D090", x"1E848",
+        x"98968", x"4C4B4", x"2625A",
+        x"BEBC2", x"5F5E1", x"2FAF1",
+        x"EE6B3", x"77359", x"3B9AD", x"1DCD6",
+        x"95030", x"4A818" );
 
-    signal bcd : std_logic_vector(15 downto 0);
+    signal bcd : std_logic_vector(bcdfrq'range);
 begin
+    -- The current values of the corrections arrays expect this
+    -- given precision
+    assert precision = 17 report "Mismatch in precision!" severity error;
 
     ord <= order;
     bcdfrq <= bcd;
@@ -73,8 +85,9 @@ begin
     conv : entity work.hex2bcd
         generic map (
             precision => final'length,
-            width => 16,
-            bits => 4 )
+            width => bcd'length,
+            bits => 5,
+			ndigits => 5 )  -- log2 of precision
         port map (
             hex => final,
             bcd => bcd,

@@ -24,17 +24,15 @@ end main;
 
 architecture Behavioral of main is
 
-	constant precision : integer := 13;
-	constant measureinterval : integer := 8191;
-
     signal input, clk2 : std_logic;
 
     signal divoverflow : std_logic;
 
-	signal final : unsigned(precision downto 0);
-	signal order : signed(7 downto 0);
+    signal final : unsigned(16 downto 0);
+    signal order, orderlatch : signed(7 downto 0);
 
-    signal bcd : std_logic_vector(15 downto 0);
+    constant bcdprecision : integer := 20;
+    signal bcd, bcdlatch : std_logic_vector(bcdprecision-1 downto 0);
 
     signal dispen : std_logic_vector(3 downto 0);
 
@@ -49,8 +47,8 @@ begin
 
 	fc : entity work.mwfc
 		generic map (
-			precision => precision,
-			measureinterval => measureinterval)
+			precision => final'length,
+			bcdprecision => bcd'length )
 		port map (
 			rawfrq => final,
 			bcdfrq => bcd,
@@ -63,7 +61,7 @@ begin
     led <= std_logic_vector(order);
     dispen <= "1111" when divoverflow = '0' else "0000";
 
-    data <= bcd;
+    data <= bcd(bcd'high downto bcd'high - 15);
 
     disp : entity work.driveseg
         port map (
@@ -91,20 +89,30 @@ begin
 
 	-- Increment digit on every clock tic
 	process(clk)
+		variable div : unsigned(22 downto 0);
 	begin
 		if rising_edge(clk) then
 			digit <= digit + "1";
+			if div = "0" then
+				bcdlatch <= bcd;
+				orderlatch <= order;
+			end if;
+			div := div + "1";
 		end if;
 	end process;
 
 	-- Set the data depending on the digit
-	process(digit, order, bcd)
+	process(digit, orderlatch, bcdlatch)
 		variable place : signed(order'range);
 		variable sdigit : signed(digit'length downto digit'low);
+		constant bcddigits : integer := bcdprecision / 4;
+		variable diff : integer;
 	begin
 		sdigit := signed("0" & std_logic_vector(digit));
-		-- Determine which digit is being targeted, signed with the ones being '0'
+		-- The counter 'digit' includes the thousands separators, so compute
+		-- the actual order of the digit currently being displayed
 		case digit(3 downto 2) is
+			-- digit = 0 corresponds to 100 MHz, so the 8th place
 			when "00" => place := to_signed(8, place'length) - sdigit;
 			when "01" => place := to_signed(9, place'length) - sdigit;
 			when "10" => place := to_signed(10, place'length) - sdigit;
@@ -113,13 +121,13 @@ begin
 		end case;
 
 		if digit = x"3" then
-			if order > to_signed(2, order'length) then
+			if orderlatch > to_signed(6 - bcddigits, order'length) then
 				tiledata <= x"002c";
 			else
 				tiledata <= x"0020";
 			end if;
 		elsif digit = x"7" then
-			if order > to_signed(-1, order'length) then
+			if orderlatch > to_signed(3 - bcddigits, order'length) then
 				tiledata <= x"002c";
 			else
 				tiledata <= x"0020";
@@ -128,19 +136,15 @@ begin
 			tiledata <= x"002e";
 		elsif digit = x"f" then
 			tiledata <= x"0020";
-		elsif place < order then
---		elsif to_signed(8,order'length) + sdigit(3 downto 2) < order + sdigit then
+		elsif place < orderlatch then
 			tiledata <= x"0030";
-		elsif place > (order + to_signed(3, order'length)) then
+		elsif place > (orderlatch + to_signed(bcddigits-1, order'length)) then
 			tiledata <= x"0020";
 		else
-			case place - order is
-				when x"00" => tiledata <= x"000" & bcd(3 downto 0);
-				when x"01" => tiledata <= x"000" & bcd(7 downto 4);
-				when x"02" => tiledata <= x"000" & bcd(11 downto 8);
-				when x"03" => tiledata <= x"000" & bcd(15 downto 12);
-				when others => tiledata <= (others => '0');
-			end case;
+			diff := to_integer(place - orderlatch);
+			assert diff >= 0 report "diff should always be > 0" severity error;
+			assert diff < bcddigits report "diff should not exceed the number of bcd digits" severity error;
+			tiledata <= x"000" & bcdlatch(4*diff + 3 downto 4*diff);
 		end if;
 	end process;
 

@@ -5,7 +5,8 @@ use IEEE.NUMERIC_STD.ALL;
 entity hex2bcd is
     Generic ( precision : integer;
               width : integer;
-              bits : integer );
+              bits : integer;
+              ndigits : integer := 4 );
     Port ( hex : in unsigned (precision-1 downto 0);
            bcd : out STD_LOGIC_VECTOR (width-1 downto 0);
            strobe : in STD_LOGIC;
@@ -16,8 +17,10 @@ end hex2bcd;
 architecture Behavioral of hex2bcd is
     signal shifter, shifter_next : unsigned (precision+width-1 downto 0);
     signal busy, busy_next : std_logic;
-    signal count, count_next : unsigned(bits-1 downto 0);
+    signal count : unsigned(bits-1 downto 0) := (others => '0');
+    signal count_next : unsigned(bits-1 downto 0);
     signal bcd_int, bcd_next : unsigned(bcd'range);
+    constant a : integer := shifter'high;  -- For convenience
 begin
 
     bcd <= std_logic_vector(bcd_int);
@@ -40,13 +43,7 @@ begin
         variable shifter_new : unsigned (precision+width-1 downto 0);
         variable busy_new : std_logic;
         variable count_new : unsigned(count'range);
-        variable a, b, c, d, e : integer;
     begin
-        a := shifter_new'high; -- Thousands
-        b := a - 4;            -- Hundreds
-        c := b - 4;            -- Tens
-        d := c - 4;            -- Ones
-        e := d - 4;            -- Binary
 
         shifter_new := shifter;
         busy_new := busy;
@@ -66,18 +63,11 @@ begin
             bcd_next <= shifter(shifter'high downto shifter'high-width+1);
             count_new := (others => '0');
         elsif busy = '1' then
-            if shifter_new(a downto b+1) > "0100" then
-                shifter_new(a downto b+1) := shifter_new(a downto b+1) + "0011";
-            end if;
-            if shifter_new(b downto c+1) > "0100" then
-                shifter_new(b downto c+1) := shifter_new(b downto c+1) + "0011";
-            end if;
-            if shifter_new(c downto d+1) > "0100" then
-                shifter_new(c downto d+1) := shifter_new(c downto d+1) + "0011";
-            end if;
-            if shifter_new(d downto e+1) > "0100" then
-                shifter_new(d downto e+1) := shifter_new(d downto e+1) + "0011";
-            end if;
+            for I in 0 to ndigits-1 loop
+                if shifter_new(a-4*I downto a-4*I-3) > "0100" then
+                    shifter_new(a-4*I downto a-4*I-3) := shifter_new(a-4*I downto a-4*I-3) + "0011";
+                end if;
+            end loop;
             shifter_new := shift_left(shifter_new, 1);
             count_new := count + "1";
         end if;
