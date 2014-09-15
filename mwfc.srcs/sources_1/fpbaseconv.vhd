@@ -6,19 +6,19 @@ library UNISIM;
 use UNISIM.VComponents.all;
 
 entity fpbaseconv is
-    Generic (
-        precision : integer := 13;
+	Generic (
+		precision : integer := 13;
 		exp_precision : integer := 8;
 		nscalestages : integer := 7 );
-    Port (
+	Port (
 		mantissa : out unsigned(precision-1 downto 0);
 		exponent : out signed(exp_precision-1 downto 0);
 		busy : out std_logic;
 		scaling : in signed(nscalestages-1 downto 0);
 		ratio : in unsigned(precision-1 downto 0);
 		strobe : in std_logic;
-        clk : in std_logic;
-        rst : in std_logic );
+		clk : in std_logic;
+		rst : in std_logic );
 end fpbaseconv;
 
 architecture Behavioral of fpbaseconv is
@@ -26,35 +26,35 @@ architecture Behavioral of fpbaseconv is
 	type state_type is (ST_WAIT, ST_PRELOAD, ST_MULT, ST_SCALE, ST_ROUND);
 	signal state, state_new : state_type;
 
-    type A is array (0 to 35) of integer;
-    constant digits : A := (
-        0, 0, 0, 0,
-        1, 1, 1,     -- 2^4 to 2^6
-        2, 2, 2,     -- 2^7 to 2^9
-        3, 3, 3, 3,  -- 2^10 to 2^13
-        4, 4, 4,     -- 2^14 to 2^16
-        5, 5, 5,     -- 2^17 to 2^19
-        6, 6, 6, 6,  -- 2^20 to 2^23
-        7, 7, 7,     -- 2^24 to 2^26
-        8, 8, 8,     -- 2^27 to 2^29
-        9, 9, 9, 9,  -- 2^30 to 2^33
-        10, 10 );    -- 2^34 to 2^35
-    type B is array(0 to 35) of unsigned(precision + 2 downto 0);
-    constant corrections : B := (
-        x"00000", x"80000", x"40000", x"20000",
-        x"A0000", x"50000", x"28000",
-        x"C8000", x"64000", x"32000",
-        x"FA000", x"7D000", x"3E800", x"1F400",
-        x"9C400", x"4E200", x"27100",
-        x"C3500", x"61A80", x"30D40",
-        x"F4240", x"7A120", x"3D090", x"1E848",
-        x"98968", x"4C4B4", x"2625A",
-        x"BEBC2", x"5F5E1", x"2FAF1",
-        x"EE6B3", x"77359", x"3B9AD", x"1DCD6",
-        x"95030", x"4A818" );
+	type A is array (0 to 35) of integer;
+	constant digits : A := (
+		0, 0, 0, 0,
+		1, 1, 1,     -- 2^4 to 2^6
+		2, 2, 2,     -- 2^7 to 2^9
+		3, 3, 3, 3,  -- 2^10 to 2^13
+		4, 4, 4,     -- 2^14 to 2^16
+		5, 5, 5,     -- 2^17 to 2^19
+		6, 6, 6, 6,  -- 2^20 to 2^23
+		7, 7, 7,     -- 2^24 to 2^26
+		8, 8, 8,     -- 2^27 to 2^29
+		9, 9, 9, 9,  -- 2^30 to 2^33
+		10, 10 );    -- 2^34 to 2^35
+	type B is array(0 to 35) of unsigned(precision + 2 downto 0);
+	constant corrections : B := (
+		x"00000", x"80000", x"40000", x"20000",
+		x"A0000", x"50000", x"28000",
+		x"C8000", x"64000", x"32000",
+		x"FA000", x"7D000", x"3E800", x"1F400",
+		x"9C400", x"4E200", x"27100",
+		x"C3500", x"61A80", x"30D40",
+		x"F4240", x"7A120", x"3D090", x"1E848",
+		x"98968", x"4C4B4", x"2625A",
+		x"BEBC2", x"5F5E1", x"2FAF1",
+		x"EE6B3", x"77359", x"3B9AD", x"1DCD6",
+		x"95030", x"4A818" );
 
-        signal corr_out : unsigned(corrections(0)'range);
-        signal digit_out : signed(exponent'range);
+		signal corr_out : unsigned(corrections(0)'range);
+		signal digit_out : signed(exponent'range);
 
 		signal factor, factor_new : unsigned(ratio'range);
 		signal shifter, shifter_new, accumulator, accumulator_new : unsigned(ratio'length + corrections(0)'length - 1 downto 0);
@@ -76,11 +76,11 @@ begin
 			state <= ST_WAIT;
 			busy_int <= '0';
 		elsif rising_edge(clk) then
-            S0 := -to_integer(scaling);  -- Floating-point base-2 exponent
+			S0 := -to_integer(scaling);  -- Floating-point base-2 exponent
 			-- Multiplication factor to convert from base-2 to base-10 for
 			-- the given base-2 exponent
 			corr_out <= corrections(S0);
-            digit_out <= to_signed(8, exponent'length) - digits(S0);  -- Get fp base-10 exponent
+			digit_out <= to_signed(8, exponent'length) - digits(S0);  -- Get fp base-10 exponent
 
 			state <= state_new;
 			factor <= factor_new;
@@ -131,10 +131,10 @@ begin
 				if factor(0) = '1' then
 					accumulator_next := accumulator + shifter;
 				elsif factor = "0" then
-                	-- 'corrections' is fixed point, shifted over precision+3 bits
+					-- 'corrections' is fixed point, shifted over precision+3 bits
 					-- Save one extra bit for rounding
 					-- Save another four bits for a multiply by 10 if needed?
-                	-- Multiply is a slow operation
+					-- Multiply is a slow operation
 					accumulator_next := shift_right(accumulator, precision + 3 - 1 - 4);
 					state_next := ST_SCALE;
 				end if;
@@ -142,8 +142,8 @@ begin
 			when ST_SCALE =>
 				-- FIXME this depends on BCD precision!
 				if accumulator < shift_left(to_unsigned(10000, accumulator'length),4) then
-                    -- Five bits, because four bits precision + 1 rounding
-                    -- Multiply by 10 (8 + 2)
+					-- Five bits, because four bits precision + 1 rounding
+					-- Multiply by 10 (8 + 2)
 					accumulator_next := shift_left(accumulator,1) + shift_left(accumulator,3);
 					exp_next := exp - 1;
 				end if;
@@ -153,7 +153,7 @@ begin
 			when ST_ROUND =>
 				-- Downshift by 4
 				-- Round based on highest truncated bit
-                if accumulator(4) = '1' then
+				if accumulator(4) = '1' then
 					mantissa_new <= accumulator(mantissa'high+5 downto 5) + "1";
 				else
 					mantissa_new <= accumulator(mantissa'high+5 downto 5);
